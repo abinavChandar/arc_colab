@@ -1,0 +1,17 @@
+{
+  "candidate_id": 9,
+  "round": 2,
+  "revised_instructions": "{\n    \"fix_errors\": [\n        {\n            \"pair_index\": 0,\n            \"input\": [2, 2, 2],\n            \"expected_output\": [2, 2, 2, 0, 0, 0, 0, 0, 0]\n        },\n        {\n            \"pair_index\": 1,\n            \"input\": [7, 7, 7],\n            \"expected_output\": [7, 7, 7, 7, 7, 7, 7, 7, 7]\n        }\n    ],\n    \"size_rules\": [\n        {\n            \"rule\": \"Resize outputs to the smallest common size between inputs and expected outputs.\",\n            \"example\": \"If an output is resized from (3, 3) to (9, 9), ensure all elements are correctly aligned.\"\n        },\n        {\n            \"rule\": \"Ensure no overfitting occurs by avoiding specific indices in training data.\",\n            \"example\": \"Avoid using the exact index of any pair's input or expected output during training.\"\n        }\n    ]\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 49,
+    "secondary_possible": 405,
+    "secondary_pct": 0.12098765432098765,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 0.2,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}

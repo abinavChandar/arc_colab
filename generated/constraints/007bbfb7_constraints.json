@@ -1,0 +1,9 @@
+{
+  "constraints": {
+    "shape": {
+      "relation": "multiply",
+      "kh": 3,
+      "kw": 3
+    }
+  }
+}

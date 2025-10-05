@@ -1,0 +1,17 @@
+{
+  "candidate_id": 0,
+  "round": 2,
+  "revised_instructions": "{\n  \"fix_errors\": [\n    {\n      \"pair_index\": 0,\n      \"input\": [2, 2, 2],\n      \"expected_output\": [2, 2, 2, 0, 0, 0, 0, 0, 0]\n    },\n    {\n      \"pair_index\": 1,\n      \"input\": [7, 7, 7],\n      \"expected_output\": [7, 7, 7, 7, 7, 7, 7, 7, 7]\n    },\n    {\n      \"pair_index\": 2,\n      \"input\": [0, 7, 7],\n      \"expected_output\": [0, 7, 7, 0, 7, 7, 0, 7, 7]\n    }\n  ],\n  \"size_rule\": [\n    {\n      \"rule\": \"Resize outputs to match the size of the input.\",\n      \"pairs\": [\n        { \"input_size\": [3, 3], \"output_size\": [9, 9] },\n        { \"input_size\": [2, 2], \"output_size\": [3, 3] }\n      ]\n    }\n  ],\n  \"overfitting_avoidance\": [\n    {\n      \"rule\": \"Avoid overfitting by using general patterns rather than specific indices.\",\n      \"pairs\": [\n        { \"pair_index\": 0 },\n        { \"pair_index\": 1 },\n        { \"pair_index\": 2 }\n      ]\n    }\n  ],\n  \"test_cases\": [\n    {\n      \"input\": [2, 2, 2],\n      \"expected_output\": [2, 2, 2, 0, 0, 0, 0, 0, 0]\n    },\n    {\n      \"input\": [7, 7, 7],\n      \"expected_output\": [7, 7, 7, 7, 7, 7, 7, 7, 7]\n    },\n    {\n      \"input\": [0, 7, 7],\n      \"expected_output\": [0, 7, 7, 0, 7, 7, 0, 7, 7]\n    }\n  ]\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 217,
+    "secondary_possible": 405,
+    "secondary_pct": 0.5358024691358024,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 0.8,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}

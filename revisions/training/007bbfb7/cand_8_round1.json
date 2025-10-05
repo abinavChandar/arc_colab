@@ -1,0 +1,17 @@
+{
+  "candidate_id": 8,
+  "round": 1,
+  "revised_instructions": "{  \n  \"instructions\": [\n    {\n      \"id\": 0,\n      \"input\": {\n        \"image_path\": \"path/to/image1.jpg\",\n        \"output_size\": [256, 256]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"cat\", \"confidence\": 0.95 },\n          { \"label\": \"dog\", \"confidence\": 0.05 }\n        ]\n      }\n    },\n    {\n      \"id\": 1,\n      \"input\": {\n        \"image_path\": \"path/to/image2.jpg\",\n        \"output_size\": [384, 384]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"bird\", \"confidence\": 0.98 },\n          { \"label\": \"fish\", \"confidence\": 0.02 }\n        ]\n      }\n    },\n    {\n      \"id\": 2,\n      \"input\": {\n        \"image_path\": \"path/to/image3.jpg\",\n        \"output_size\": [448, 448]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"cat\", \"confidence\": 0.91 },\n          { \"label\": \"dog\", \"confidence\": 0.09 }\n        ]\n      }\n    },\n    {\n      \"id\": 3,\n      \"input\": {\n        \"image_path\": \"path/to/image4.jpg\",\n        \"output_size\": [512, 512]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"bird\", \"confidence\": 0.96 },\n          { \"label\": \"fish\", \"confidence\": 0.04 }\n        ]\n      }\n    }\n  ],\n  \"validation_data\": [\n    {\n      \"input\": {\n        \"image_path\": \"path/to/image5.jpg\",\n        \"output_size\": [256, 256]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"cat\", \"confidence\": 0.93 },\n          { \"label\": \"dog\", \"confidence\": 0.07 }\n        ]\n      }\n    },\n    {\n      \"input\": {\n        \"image_path\": \"path/to/image6.jpg\",\n        \"output_size\": [384, 384]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"bird\", \"confidence\": 0.97 },\n          { \"label\": \"fish\", \"confidence\": 0.03 }\n        ]\n      }\n    },\n    {\n      \"input\": {\n        \"image_path\": \"path/to/image7.jpg\",\n        \"output_size\": [448, 448]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"cat\", \"confidence\": 0.92 },\n          { \"label\": \"dog\", \"confidence\": 0.08 }\n        ]\n      }\n    },\n    {\n      \"input\": {\n        \"image_path\": \"path/to/image8.jpg\",\n        \"output_size\": [512, 512]\n      },\n      \"expected_output\": {\n        \"predictions\": [\n          { \"label\": \"bird\", \"confidence\": 0.97 },\n          { \"label\": \"fish\", \"confidence\": 0.03 }\n        ]\n      }\n    }\n  ],\n  \"evaluation_metrics\": [\"accuracy\", \"precision\", \"recall\"]\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 0,
+    "secondary_possible": 405,
+    "secondary_pct": 0.0,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 0.0,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "candidate_id": 6,
+  "round": 2,
+  "revised_instructions": "{  \n  \"instructions\": [\n    {\n      \"id\": 0,\n      \"input\": {\n        \"image_path\": \"path/to/image1.jpg\"\n      },\n      \"output\": {\n        \"resize_to\": [256, 256],\n        \"padding_type\": \"constant\",\n        \"padding_value\": 0\n      }\n    },\n    {\n      \"id\": 1,\n      \"input\": {\n        \"image_path\": \"path/to/image2.jpg\"\n      },\n      \"output\": {\n        \"resize_to\": [384, 384],\n        \"padding_type\": \"constant\",\n        \"padding_value\": 0\n      }\n    },\n    {\n      \"id\": 2,\n      \"input\": {\n        \"image_path\": \"path/to/image3.jpg\"\n      },\n      \"output\": {\n        \"resize_to\": [512, 512],\n        \"padding_type\": \"constant\",\n        \"padding_value\": 0\n      }\n    },\n    {\n      \"id\": 3,\n      \"input\": {\n        \"image_path\": \"path/to/image4.jpg\"\n      },\n      \"output\": {\n        \"resize_to\": [768, 768],\n        \"padding_type\": \"constant\",\n        \"padding_value\": 0\n      }\n    },\n    {\n      \"id\": 4,\n      \"input\": {\n        \"image_path\": \"path/to/image5.jpg\"\n      },\n      \"output\": {\n        \"resize_to\": [1024, 1024],\n        \"padding_type\": \"constant\",\n        \"padding_value\": 0\n      }\n    }\n  ]\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 0,
+    "secondary_possible": 405,
+    "secondary_pct": 0.0,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 0.0,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}

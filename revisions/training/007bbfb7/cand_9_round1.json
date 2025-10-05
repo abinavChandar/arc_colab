@@ -1,0 +1,17 @@
+{
+  "candidate_id": 9,
+  "round": 1,
+  "revised_instructions": "{  \n  \"fix_errors\": [\n    {\n      \"pair_index\": 0,\n      \"expected_output_size\": \"8x8\",\n      \"actual_output_size\": \"6x7\"\n    },\n    {\n      \"pair_index\": 1,\n      \"expected_output_size\": \"9x9\",\n      \"actual_output_size\": \"7x8\"\n    },\n    {\n      \"pair_index\": 2,\n      \"expected_output_size\": \"8x8\",\n      \"actual_output_size\": \"6x7\"\n    },\n    {\n      \"pair_index\": 3,\n      \"expected_output_size\": \"9x9\",\n      \"actual_output_size\": \"8x9\"\n    }\n  ],\n  \"fix_instructions\": [\n    {\n      \"description\": \"Adjust the output size to be consistent with expected dimensions.\",\n      \"instructions\": [\n        {\n          \"pair_index\": 0,\n          \"expected_output_size\": \"8x8\",\n          \"actual_output_size\": \"6x7\"\n        },\n        {\n          \"pair_index\": 1,\n          \"expected_output_size\": \"9x9\",\n          \"actual_output_size\": \"7x8\"\n        },\n        {\n          \"pair_index\": 2,\n          \"expected_output_size\": \"8x8\",\n          \"actual_output_size\": \"6x7\"\n        },\n        {\n          \"pair_index\": 3,\n          \"expected_output_size\": \"9x9\",\n          \"actual_output_size\": \"8x9\"\n        }\n      ]\n    }\n  ]\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 122,
+    "secondary_possible": 405,
+    "secondary_pct": 0.3012345679012346,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 0.4,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}

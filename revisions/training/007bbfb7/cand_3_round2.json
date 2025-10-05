@@ -1,0 +1,17 @@
+{
+  "candidate_id": 3,
+  "round": 2,
+  "revised_instructions": "{  \n  \"instructions\": [\n    {\n      \"id\": 0,\n      \"input\": [\"7 7 7\", \"7 7 7\"],\n      \"predicted\": [\"7 7 7\", \"7 7 7\"]\n    },\n    {\n      \"id\": 1,\n      \"input\": [\"0 7 7\", \"7 7 7\"],\n      \"predicted\": [\"7 7 7\", \"7 7 7\"]\n    },\n    {\n      \"id\": 2,\n      \"input\": [\"0 7 7\", \"7 7 7\"],\n      \"predicted\": [\"7 7 7\", \"7 7 7\"]\n    },\n    {\n      \"id\": 3,\n      \"input\": [\"0 7 7\", \"7 7 7\"],\n      \"predicted\": [\"7 7 7\", \"7 7 7\"]\n    }\n  ]\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 0,
+    "secondary_possible": 405,
+    "secondary_pct": 0.0,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 0.0,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}

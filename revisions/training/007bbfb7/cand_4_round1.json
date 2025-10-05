@@ -1,0 +1,17 @@
+{
+  "candidate_id": 4,
+  "round": 1,
+  "revised_instructions": "{  \n\"pairs\": [\n  {\n    \"input\": [2, 2, 2],\n    \"predicted\": [2, 2, 2, 0, 0, 0, 0, 0, 0]\n  },\n  {\n    \"input\": [7, 7, 7],\n    \"predicted\": [7, 7, 7, 7, 7, 7, 7, 7, 7]\n  },\n  {\n    \"input\": [0, 7, 7],\n    \"predicted\": [0, 7, 7, 7, 7, 7, 7, 7, 7]\n  }\n],\n\"output_size_rule\": \"The output size should match the input size.\"\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 159,
+    "secondary_possible": 405,
+    "secondary_pct": 0.3925925925925926,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 0.8,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}

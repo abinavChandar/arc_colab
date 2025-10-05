@@ -1,0 +1,14 @@
+{
+  "ops": [
+    {
+      "op": "repeat",
+      "times": 3,
+      "axis": "rows"
+    },
+    {
+      "op": "repeat",
+      "times": 3,
+      "axis": "cols"
+    }
+  ]
+}

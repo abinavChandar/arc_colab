@@ -1,0 +1,17 @@
+{
+  "candidate_id": 5,
+  "round": 2,
+  "revised_instructions": "{  \n  \"fix_errors\": [\n    {\n      \"pair_index\": 0,\n      \"input\": [0, 7, 7],\n      \"output\": [2, 2, 2, 2, 0, 0, 0, 0, 0]\n    },\n    {\n      \"pair_index\": 1,\n      \"input\": [7, 7, 7],\n      \"output\": [2, 2, 2, 0, 0, 0, 0, 0, 0]\n    },\n    {\n      \"pair_index\": 2,\n      \"input\": [0, 7, 7],\n      \"output\": [2, 2, 2, 2, 0, 0, 0, 0, 0]\n    },\n    {\n      \"pair_index\": 3,\n      \"input\": [0, 7, 7],\n      \"output\": [2, 2, 2, 2, 0, 0, 0, 0, 0]\n    }\n  ],\n  \"resize_rule\": \"Resize to the largest dimension of all inputs.\"\n}",
+  "evaluation": {
+    "task_id": "007bbfb7",
+    "primary_perfect": 0,
+    "primary_pct": 0.0,
+    "secondary_cells": 225,
+    "secondary_possible": 405,
+    "secondary_pct": 0.5555555555555556,
+    "num_pairs": 5,
+    "parse_rate": 1.0,
+    "size_ok_rate": 1.0,
+    "size_ok_rate_unconstrained": 0.0
+  }
+}
