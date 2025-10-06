@@ -244,7 +244,7 @@ def apply_with_shape(client: OllamaClient,
     # initial parse tries
     for k in range(max(1, parse_attempts)):
         try:
-            raw = client.generate(model=model, prompt=prompt, temperature=temperature, stream=False)
+            raw = client.generate(model=model, prompt=prompt, temperature=temperature)
             g = try_extract_json_grid(raw)
             if g is not None:
                 pred = g
@@ -265,7 +265,7 @@ def apply_with_shape(client: OllamaClient,
                 "Use only integers 0–9; no prose."
             )
             try:
-                raw2 = client.generate(model=model, prompt=prompt + nudge, temperature=temperature, stream=False)
+                raw2 = client.generate(model=model, prompt=prompt + nudge, temperature=temperature)
                 g2 = try_extract_json_grid(raw2)
                 if g2 is not None:
                     pred = g2
@@ -421,8 +421,7 @@ def main() -> None:
                 last_err: Optional[str] = None
                 try:
                     response_text = client.generate(
-                        model=args.model, prompt=prompt, temperature=temp_k,
-                        seed=seed_k, stream=False
+                        model=args.model, prompt=prompt, temperature=temp_k, seed=seed_k
                     )
                 except Exception as e:
                     last_err = str(e)
