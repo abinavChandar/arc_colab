@@ -126,6 +126,7 @@ def main():
     ap.add_argument("--describer-candidate-tries", type=int, default=6)
     ap.add_argument("--describer-print-shape", action="store_true")
     ap.add_argument("--overwrite-describer", action="store_true")
+    ap.add_argument("--describer-timeout", type=int, default=600)
 
     # Phase B: individual reviser
     ap.add_argument("--rounds", type=int, default=1)
@@ -195,6 +196,7 @@ def main():
         "--num-candidates", str(args.num_candidates),
         "--shape-attempts", str(args.describer_shape_attempts),
         "--candidate-tries", str(args.describer_candidate_tries),
+        "--timeout", str(args.describer_timeout),   # <-- pass through to describer (fix)
     ]
     if args.describer_print_shape:
         cmdA.append("--print-shape-check")
