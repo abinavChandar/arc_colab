@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ARC-AGI NL Instruction Reviser — multi-round revisions + proper secondary accuracy
+vLLM/OpenAI-compatible version
 
 • Loads NL candidates from ./outputs/<split>/<task_id>.json
 • For each candidate, repeats for --rounds:
@@ -16,20 +17,17 @@ ARC-AGI NL Instruction Reviser — multi-round revisions + proper secondary accu
 • Saves each round’s revised instructions to:
     revisions/<split>/<task_id>/cand_<cid>_round<r>.json
 
-Important flags:
---rounds N                    number of revision rounds (default 1)
---reviser-model               LLM used to rewrite instructions (default qwen2.5-coder:7b)
---model                       LLM used to APPLY instructions to grids (default qwen2.5:1.5b-instruct)
---strict-shape                also run an unconstrained shape check (reports size_ok_unconstrained)
---strict-affects-secondary    if set, zero secondary when unconstrained shape fails (old behavior)
+Environment (picked up by the compat client):
+  OPENAI_BASE_URL (e.g. http://127.0.0.1:8000/v1 for vLLM)
+  OPENAI_API_KEY  (dummy token ok for vLLM, header required)
 
 Example:
 python3 arc_nl_reviser_all.py \
   --root /path/to/ARC-AGI-2/data \
   --split training \
   --task-id 00576224 \
-  --reviser-model qwen2.5-coder:7b \
-  --model qwen2.5:1.5b-instruct \
+  --reviser-model Qwen/Qwen2.5-7B-Instruct \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
   --rounds 3 \
   --shape-attempts 3 \
   --strict-shape \
@@ -46,7 +44,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import http.client
+
+# Use the OpenAI-compatible shim (works with vLLM endpoint)
+from vllm_compat import SyncClient as OllamaClient  # alias retained for minimal diffs
 
 # ------------------------- ARC I/O -------------------------
 def load_arc_task(task_path: Path) -> Dict[str, Any]:
@@ -125,65 +125,6 @@ def try_extract_json_grid(text: str) -> Optional[List[List[int]]]:
         pass
     return None
 
-# ------------------------- Ollama client -------------------------
-class OllamaClient:
-    def __init__(self, host="localhost", port=11434, timeout=120):
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-
-    def generate(self, model: str, prompt: str, temperature: float = 0.1, seed: Optional[int] = None) -> str:
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "stream": True,
-            "keep_alive": "30m",
-            "format": "json",  # request valid JSON when possible (ignored for plain text models)
-            "options": {
-                "temperature": float(temperature),
-                "num_thread": 10,   # tune to your CPU
-                "num_ctx": 2048,
-                "num_batch": 128,
-                "num_predict": 1024,
-            },
-        }
-        if seed is not None:
-            payload["options"]["seed"] = int(seed)
-
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
-        try:
-            body = json.dumps(payload)
-            conn.putrequest("POST", "/api/generate")
-            conn.putheader("Content-Type", "application/json")
-            conn.putheader("Content-Length", str(len(body)))
-            conn.endheaders()
-            conn.send(body.encode("utf-8"))
-
-            chunks: List[str] = []
-            resp = conn.getresponse()
-            if resp.status != 200:
-                raise RuntimeError(f"Ollama HTTP {resp.status}: {resp.reason}")
-            for raw_line in resp.read().splitlines():
-                if not raw_line:
-                    continue
-                try:
-                    obj = json.loads(raw_line.decode("utf-8"))
-                except Exception:
-                    try:
-                        obj = json.loads(raw_line)
-                    except Exception:
-                        continue
-                if "error" in obj:
-                    raise RuntimeError(f"Ollama error: {obj['error']}")
-                if obj.get("done"):
-                    break
-                token = obj.get("response", "")
-                if token:
-                    chunks.append(token)
-            return "".join(chunks).strip()
-        finally:
-            conn.close()
-
 # ------------------------- Apply prompts -------------------------
 APPLY_SYSTEM = (
     "You are an ARC grid transformer. APPLY the given instructions to the INPUT grid.\n"
@@ -252,7 +193,7 @@ def apply_constrained(client: OllamaClient, model: str, task_id: str,
     # initial parse tries
     for k in range(max(1, parse_attempts)):
         try:
-            raw = client.generate(model=model, prompt=prompt, temperature=temperature)
+            raw = client.generate(model=model, prompt=prompt, temperature=temperature, stream=False)
             g = try_extract_json_grid(raw)
             if g is not None:
                 pred = g
@@ -265,7 +206,7 @@ def apply_constrained(client: OllamaClient, model: str, task_id: str,
     if pred is None:
         nudge = "\nReturn ONLY a JSON object with a single key 'grid', for example: {\"grid\": [[0,1],[2,3]]}"
         try:
-            raw2 = client.generate(model=model, prompt=prompt + nudge, temperature=temperature)
+            raw2 = client.generate(model=model, prompt=prompt + nudge, temperature=temperature, stream=False)
             g2 = try_extract_json_grid(raw2)
             if g2 is not None:
                 pred = g2
@@ -285,7 +226,7 @@ def apply_constrained(client: OllamaClient, model: str, task_id: str,
                 "Use only integers 0–9; no prose."
             )
             try:
-                raw3 = client.generate(model=model, prompt=prompt + nudge2, temperature=temperature)
+                raw3 = client.generate(model=model, prompt=prompt + nudge2, temperature=temperature, stream=False)
                 g3 = try_extract_json_grid(raw3)
                 if g3 is not None:
                     pred = g3
@@ -308,7 +249,7 @@ def apply_unconstrained(client: OllamaClient, model: str, task_id: str,
     pred, note, err = None, "", None
     for k in range(2):
         try:
-            raw = client.generate(model=model, prompt=prompt, temperature=temperature)
+            raw = client.generate(model=model, prompt=prompt, temperature=temperature, stream=False)
             g = try_extract_json_grid(raw)
             if g is not None:
                 pred = g
@@ -541,11 +482,11 @@ def main():
     ap.add_argument("--describer-outputs", type=Path, default=Path("outputs"))
     ap.add_argument("--revisions-out", type=Path, default=Path("revisions"))
 
-    # Models
-    ap.add_argument("--reviser-model", type=str, default="qwen2.5-coder:7b",
+    # Models (defaults switched to HF IDs to match vLLM launches)
+    ap.add_argument("--reviser-model", type=str, default="Qwen/Qwen2.5-7B-Instruct",
                     help="Model used to REWRITE the instructions each round (NL).")
-    ap.add_argument("--model", type=str, default="qwen2.5:1.5b-instruct",
-                    help="Model used to APPLY instructions to grids (JSON).")
+    ap.add_argument("--model", type=str, default="Qwen/Qwen2.5-1.5B-Instruct",
+                    help="Model used to APPLY instructions to grids (JSON-friendly, smaller OK).")
 
     # Behaviors
     ap.add_argument("--temperature", type=float, default=0.05, help="Apply temperature (keep low for JSON).")
@@ -640,22 +581,19 @@ def main():
                 # Build revision prompt from current eval
                 revision_prompt = build_revision_prompt(task_id, task, instructions, eval_res["pairs"])
 
-                # Ask reviser model (plain text expected). We want natural language, not JSON.
-                # Temporarily override "format":"json" by not relying on it for reviser instructions;
-                # we reuse the client but the endpoint will ignore format for many text models anyway.
+                # Ask reviser model (plain text expected).
                 try:
                     revised = reviser_client.generate(
                         model=args.reviser_model,
                         prompt=revision_prompt,
-                        temperature=args.revise_temperature
+                        temperature=args.revise_temperature,
+                        stream=False
                     )
                 except Exception as e:
                     print(f"    ! reviser error (cand {cand_id}, round {r}): {e}")
-                    # If reviser fails, keep previous instructions
                     revised = instructions
 
-                # Basic sanitation: keep a bounded-length revision
-                revised = (revised or "").strip()
+                revised = (revised or "").trim() if hasattr(str, "trim") else (revised or "").strip()
                 if not revised:
                     revised = instructions  # fallback
 

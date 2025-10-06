@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 ARC-AGI NL — Pooled Revision Phase (Screenshot-Style Prompt)
+OpenAI/vLLM-compatible client
+
 Robust to revision files where 'evaluation' is either:
   A) {'summary': {...}, 'pairs': [...]}
   B) {...flat summary fields...}  (no 'summary' key)
@@ -9,7 +11,19 @@ Robust to revision files where 'evaluation' is either:
 If B, we wrap it as {'summary': <that dict>, 'pairs': []} and (optionally) quick-evaluate
 to populate pairs for nicer per-example accuracy lines.
 
-See usage example at the bottom of this file.
+Environment (picked up by the compat client):
+  OPENAI_BASE_URL (e.g. http://127.0.0.1:8000/v1 for vLLM or http://localhost:11434/v1 for Ollama)
+  OPENAI_API_KEY  (dummy token ok for local servers, header required)
+
+Usage example:
+  python3 arc_nl_pooled_reviser.py \
+    --root /path/to/ARC-AGI-2/data \
+    --split training \
+    --task-id 00576224 \
+    --reviser-model Qwen/Qwen2.5-7B-Instruct \
+    --apply-model Qwen/Qwen2.5-1.5B-Instruct \
+    --top-k 5 --num-new 5 \
+    --evaluate-new --print-grids
 """
 from __future__ import annotations
 
@@ -20,9 +34,11 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-import http.client
 import datetime as dt
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# OpenAI-compatible shim (works with vLLM or Ollama's /v1)
+from vllm_compat import SyncClient as OllamaClient  # alias retained for minimal diffs
 
 # ------------------------- ARC I/O -------------------------
 def load_arc_task(task_path: Path) -> Dict[str, Any]:
@@ -114,64 +130,6 @@ def try_extract_json_grid(text: str) -> Optional[List[List[int]]]:
         pass
     return None
 
-# ------------------------- Ollama client -------------------------
-class OllamaClient:
-    def __init__(self, host="localhost", port=11434, timeout=120):
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-
-    def generate(self, model: str, prompt: str, temperature: float = 0.2, seed: Optional[int] = None) -> str:
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "stream": True,
-            "keep_alive": "30m",
-            "options": {
-                "temperature": float(temperature),
-                "num_thread": 10,
-                "num_ctx": 2048,
-                "num_batch": 128,
-                "num_predict": 1024,
-            },
-        }
-        if seed is not None:
-            payload["options"]["seed"] = int(seed)
-
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
-        try:
-            body = json.dumps(payload)
-            conn.putrequest("POST", "/api/generate")
-            conn.putheader("Content-Type", "application/json")
-            conn.putheader("Content-Length", str(len(body)))
-            conn.endheaders()
-            conn.send(body.encode("utf-8"))
-
-            chunks: List[str] = []
-            resp = conn.getresponse()
-            if resp.status != 200:
-                raise RuntimeError(f"Ollama HTTP {resp.status}: {resp.reason}")
-            for raw_line in resp.read().splitlines():
-                if not raw_line:
-                    continue
-                try:
-                    obj = json.loads(raw_line.decode("utf-8"))
-                except Exception:
-                    try:
-                        obj = json.loads(raw_line)
-                    except Exception:
-                        continue
-                if "error" in obj:
-                    raise RuntimeError(f"Ollama error: {obj['error']}")
-                if obj.get("done"):
-                    break
-                token = obj.get("response", "")
-                if token:
-                    chunks.append(token)
-            return "".join(chunks).strip()
-        finally:
-            conn.close()
-
 # ------------------------- Constrained apply + scoring -------------------------
 APPLY_SYSTEM = (
     "You are an ARC grid transformer. APPLY the given instructions to the INPUT grid.\n"
@@ -227,7 +185,7 @@ def try_apply_constrained(client: OllamaClient, apply_model: str, task_id: str,
     # parse attempts
     for k in range(max(1, parse_attempts)):
         try:
-            raw = client.generate(model=apply_model, prompt=prompt, temperature=temperature)
+            raw = client.generate(model=apply_model, prompt=prompt, temperature=temperature, stream=False)
             g = try_extract_json_grid(raw)
             if g is not None:
                 pred = g
@@ -247,7 +205,7 @@ def try_apply_constrained(client: OllamaClient, apply_model: str, task_id: str,
                 "Use only integers 0–9; no prose."
             )
             try:
-                raw2 = client.generate(model=apply_model, prompt=prompt + nudge, temperature=temperature)
+                raw2 = client.generate(model=apply_model, prompt=prompt + nudge, temperature=temperature, stream=False)
                 g2 = try_extract_json_grid(raw2)
                 if g2 is not None:
                     pred = g2
@@ -504,10 +462,10 @@ def main():
     ap.add_argument("--task-id", type=str, default="")
     ap.add_argument("--max-tasks", type=int, default=0)
 
-    # Models
-    ap.add_argument("--reviser-model", type=str, default="qwen2.5-coder:7b",
+    # Models (defaults updated to HF-style IDs)
+    ap.add_argument("--reviser-model", type=str, default="Qwen/Qwen2.5-7B-Instruct",
                     help="Model to synthesize pooled NEW instructions.")
-    ap.add_argument("--apply-model", type=str, default="qwen2.5:1.5b-instruct",
+    ap.add_argument("--apply-model", type=str, default="Qwen/Qwen2.5-1.5B-Instruct",
                     help="Model to APPLY instructions to grids for scoring (fast JSON-friendly).")
 
     # Generation/Eval params
@@ -599,8 +557,13 @@ def main():
             text = None
             err = None
             try:
-                text = reviser_client.generate(model=args.reviser_model, prompt=pooled_prompt,
-                                               temperature=temp_k, seed=seed_k)
+                text = reviser_client.generate(
+                    model=args.reviser_model,
+                    prompt=pooled_prompt,
+                    temperature=temp_k,
+                    seed=seed_k,
+                    stream=False
+                )
             except Exception as e:
                 err = str(e)
             ts = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

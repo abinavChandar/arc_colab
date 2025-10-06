@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 ARC-AGI Natural-Language Task Describer (multi-candidate, SHAPE-VALIDATED)
+vLLM-ready version
 
-Generates *multiple* plain-English instruction candidates per task using a local
-Ollama model (default: qwen2.5-coder:7b).
+Generates *multiple* plain-English instruction candidates per task using an
+OpenAI-compatible endpoint (e.g., vLLM). After generating a candidate, we APPLY
+those instructions to each training input and ENFORCE the ground-truth OUTPUT
+SHAPE. If any pair fails to match the exact shape (even after corrective
+nudges), the candidate is rejected and we regenerate a new one (up to
+--candidate-tries per candidate slot).
 
-After generating a candidate, we immediately APPLY those instructions to each
-training input and ENFORCE the ground-truth OUTPUT SHAPE. If any pair fails to
-match the exact shape (even after corrective nudges), the candidate is rejected
-and we regenerate a new one (up to --candidate-tries per candidate slot).
+Environment (picked up by the compat client):
+  OPENAI_BASE_URL (default http://127.0.0.1:8000/v1)
+  OPENAI_API_KEY  (value content ignored by vLLM but header required)
 
 Outputs:
-  - ./outputs/<split>/<task_id>.json  (per-task bundle with only shape-valid candidates)
-  - ./outputs/<split>/nl_descriptions.jsonl  (one line per accepted candidate)
+  - ./outputs/<split>/<task_id>.json            (per-task bundle of shape-valid candidates)
+  - ./outputs/<split>/nl_descriptions.jsonl     (one line per accepted candidate)
 
 Example:
   python3 arc_nl_describer.py \
     --root /path/to/ARC-AGI-2/data \
     --split training \
     --max-tasks 25 \
-    --model qwen2.5-coder:7b \
+    --model Qwen/Qwen2.5-7B-Instruct \
     --num-candidates 10
 
 Flags:
@@ -27,8 +32,9 @@ Flags:
   --apply-temperature      Temperature for APPLY (default: 0.1)
   --shape-attempts         Corrective retries to hit target shape per pair (default: 4)
   --candidate-tries        Max regenerations per candidate slot until one passes shape (default: 6)
-  --print-shape-check      Print per-pair pred vs truth shapes during candidate validation (default: off)
+  --print-shape-check      Print per-pair pred vs truth shapes during validation (default: off)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,7 +47,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
 
-import http.client
+# IMPORTANT: use the vLLM/OpenAI-compatible client shim
+# (you already have/added this file as per earlier instructions)
+from vllm_compat import SyncClient as OllamaClient  # noqa: N813 (we intentionally alias)
 
 # -------------------------
 # ARC I/O helpers
@@ -166,60 +174,6 @@ def build_apply_prompt(task_id: str,
     )
 
 # -------------------------
-# Minimal Ollama client
-# -------------------------
-
-class OllamaClient:
-    def __init__(self, host: str = "localhost", port: int = 11434, timeout: int = 120):
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-
-    def generate(self, model: str, prompt: str, temperature: float = 0.2, seed: int | None = None) -> str:
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "stream": True,
-            "options": {"temperature": float(temperature)},
-        }
-        if seed is not None:
-            payload["options"]["seed"] = int(seed)
-
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
-        try:
-            body = json.dumps(payload)
-            conn.putrequest("POST", "/api/generate")
-            conn.putheader("Content-Type", "application/json")
-            conn.putheader("Content-Length", str(len(body)))
-            conn.endheaders()
-            conn.send(body.encode("utf-8"))
-
-            chunks: List[str] = []
-            resp = conn.getresponse()
-            if resp.status != 200:
-                raise RuntimeError(f"Ollama HTTP {resp.status}: {resp.reason}")
-            for raw_line in resp.read().splitlines():
-                if not raw_line:
-                    continue
-                try:
-                    obj = json.loads(raw_line.decode("utf-8"))
-                except Exception:
-                    try:
-                        obj = json.loads(raw_line)
-                    except Exception:
-                        continue
-                if "error" in obj:
-                    raise RuntimeError(f"Ollama error: {obj['error']}")
-                if obj.get("done"):
-                    break
-                token = obj.get("response", "")
-                if token:
-                    chunks.append(token)
-            return "".join(chunks).strip()
-        finally:
-            conn.close()
-
-# -------------------------
 # Parsing helpers
 # -------------------------
 
@@ -239,7 +193,7 @@ def is_valid_grid(obj: Any) -> bool:
                 return False
     return True
 
-def try_extract_json_grid(text: str) -> List[List[int]] | None:
+def try_extract_json_grid(text: str) -> Optional[List[List[int]]]:
     # Direct parse
     try:
         obj = json.loads(text)
@@ -262,6 +216,7 @@ def try_extract_json_grid(text: str) -> List[List[int]] | None:
             return obj
     except Exception:
         return None
+    return None
 
 # -------------------------
 # Shape validation (apply)
@@ -289,7 +244,7 @@ def apply_with_shape(client: OllamaClient,
     # initial parse tries
     for k in range(max(1, parse_attempts)):
         try:
-            raw = client.generate(model=model, prompt=prompt, temperature=temperature)
+            raw = client.generate(model=model, prompt=prompt, temperature=temperature, stream=False)
             g = try_extract_json_grid(raw)
             if g is not None:
                 pred = g
@@ -310,7 +265,7 @@ def apply_with_shape(client: OllamaClient,
                 "Use only integers 0–9; no prose."
             )
             try:
-                raw2 = client.generate(model=model, prompt=prompt + nudge, temperature=temperature)
+                raw2 = client.generate(model=model, prompt=prompt + nudge, temperature=temperature, stream=False)
                 g2 = try_extract_json_grid(raw2)
                 if g2 is not None:
                     pred = g2
@@ -383,29 +338,29 @@ def save_per_task_json(out_dir: Path, task_id: str, payload: Dict[str, Any]) -> 
 # -------------------------
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="ARC-AGI natural-language describer using Ollama (multi-candidate, shape-validated)")
+    p = argparse.ArgumentParser(description="ARC-AGI natural-language describer (vLLM/OpenAI-compatible) — multi-candidate, shape-validated")
     p.add_argument("--root", type=Path, required=True, help="Path to ARC-AGI dataset root (contains training/ evaluation/)")
     p.add_argument("--split", type=str, choices=["training", "evaluation"], default="training")
     p.add_argument("--max-tasks", type=int, default=0, help="Optional cap on number of tasks (0 = all)")
 
-    p.add_argument("--model", type=str, default="qwen2.5-coder:7b", help="Model for NL description (describer)")
+    # Defaults updated to HF IDs that match vLLM launches
+    p.add_argument("--model", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="Model for NL description (describer)")
     p.add_argument("--temperature", type=float, default=0.2, help="Temperature for describer")
 
     p.add_argument("--apply-model", type=str, default="", help="Model for APPLY shape checks (default: same as --model)")
     p.add_argument("--apply-temperature", type=float, default=0.1, help="Temperature for APPLY")
 
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--timeout", type=int, default=120, help="Ollama HTTP timeout seconds")
+    p.add_argument("--timeout", type=int, default=120, help="Request timeout seconds (handled by compat client)")
     p.add_argument("--outputs", type=Path, default=Path("outputs"))
     p.add_argument("--overwrite", action="store_true", help="Regenerate even if per-task JSON exists")
     p.add_argument("--num-candidates", type=int, default=10, help="Number of NL candidates per task")
 
-    # NEW: hard shape gating
+    # Hard shape gating
     p.add_argument("--shape-attempts", type=int, default=4, help="Corrective retries to hit target shape per pair")
     p.add_argument("--candidate-tries", type=int, default=6, help="Regenerations per candidate slot until one passes shape")
     p.add_argument("--print-shape-check", action="store_true", help="Print per-pair pred vs truth shapes during validation")
     p.add_argument("--task-id", type=str, default="", help="Only run this task id (e.g. 00576224)")
-
 
     args = p.parse_args()
 
@@ -426,6 +381,8 @@ def main() -> None:
         sys.exit(2)
 
     out_dir, jsonl_path = ensure_out_dirs(args.outputs, args.split)
+
+    # The compat client reads OPENAI_BASE_URL / OPENAI_API_KEY from env.
     client = OllamaClient(timeout=args.timeout)
 
     print(f"Found {len(tasks)} tasks. Generating up to {args.num_candidates} SHAPE-VALID NL candidates per task…", flush=True)
@@ -461,10 +418,11 @@ def main() -> None:
 
                 # Generate instructions
                 response_text = None
-                last_err: str | None = None
+                last_err: Optional[str] = None
                 try:
                     response_text = client.generate(
-                        model=args.model, prompt=prompt, temperature=temp_k, seed=seed_k
+                        model=args.model, prompt=prompt, temperature=temp_k,
+                        seed=seed_k, stream=False
                     )
                 except Exception as e:
                     last_err = str(e)

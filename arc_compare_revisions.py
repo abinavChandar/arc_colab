@@ -5,24 +5,25 @@ ARC-AGI NL — Individual vs Pooled Revision: Side-by-Side Comparison
 
 Reads:
 - Individual revision results:   revisions/<split>/<task_id>/cand_{ID}_round*.json
+  (uses the latest round per candidate)
 - Pooled revision eval results:  eval_outputs_pooled/<split>/<task_id>/pooled_cand_{ID}.json
   (created by arc_nl_pooled_reviser.py when run with --evaluate-new)
 
 Outputs a colorized table comparing:
-  * Best (primary DESC, then secondary_pct DESC)
+  * Best (primary DESC, then secondary_pct DESC, then parse_rate DESC)
   * Average (across candidates)
 
-If pooled eval files are missing, the pooled columns will show "N/A".
-(You can re-run pooled reviser with --evaluate-new to produce them.)
+Extras (optional):
+  --show-top N     Show the top-N candidates (IDs + primary/secondary/parse/size_ok)
+  --save-csv path  Save a CSV with per-candidate summaries (individual & pooled)
 
-Example:
-python3 arc_compare_revisions.py \
-  --split training \
-  --task-id 00576224
+If pooled eval files are missing, the pooled columns show "N/A".
 """
+
 from __future__ import annotations
 
 import argparse
+import csv
 import glob
 import json
 from pathlib import Path
@@ -44,7 +45,8 @@ def pct_color(p: float) -> str:
     return RED
 
 def fmt_pct(p: Optional[float]) -> str:
-    if p is None: return GREY + "N/A" + RESET
+    if p is None:
+        return GREY + "N/A" + RESET
     return f"{p*100:.1f}%"
 
 def fmt_rate(p: Optional[float]) -> str:
@@ -52,6 +54,18 @@ def fmt_rate(p: Optional[float]) -> str:
 
 def cfmt(label: str, color: str) -> str:
     return f"{color}{label}{RESET}"
+
+def safe_float(x: Any, default: float = 0.0) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return default
+
+def safe_int(x: Any, default: int = 0) -> int:
+    try:
+        return int(x)
+    except Exception:
+        return default
 
 # ---------- normalization ----------
 def normalize_eval(e: Dict[str, Any]) -> Dict[str, Any]:
@@ -77,7 +91,6 @@ def load_individual_revisions(rev_root: Path, split: str, task_id: str) -> List[
     task_dir = rev_root / split / task_id
     if not task_dir.exists():
         return []
-    # group by cand id
     files = sorted(task_dir.glob("cand_*_round*.json"), key=lambda p: p.stem)
     latest_by_cid: Dict[int, Path] = {}
     for p in files:
@@ -85,11 +98,10 @@ def load_individual_revisions(rev_root: Path, split: str, task_id: str) -> List[
         stem = p.stem
         try:
             cid = int(stem.split("_")[1])
-            # Always overwrite; sorted ensures later rounds replace earlier
-            latest_by_cid[cid] = p
+            latest_by_cid[cid] = p  # later rounds overwrite earlier due to sorting
         except Exception:
             continue
-    out = []
+    out: List[Dict[str, Any]] = []
     for cid, p in sorted(latest_by_cid.items()):
         try:
             obj = json.loads(p.read_text(encoding="utf-8"))
@@ -105,13 +117,11 @@ def load_pooled_evals(eval_root: Path, split: str, task_id: str) -> List[Dict[st
     if not task_dir.exists():
         return []
     paths = sorted(task_dir.glob("pooled_cand_*.json"), key=lambda p: p.stem)
-    out = []
+    out: List[Dict[str, Any]] = []
     for p in paths:
         try:
             obj = json.loads(p.read_text(encoding="utf-8"))
-            # store pooled_id for display
-            stem = p.stem
-            pid = int(stem.split("_")[-1])
+            pid = int(p.stem.split("_")[-1])  # pooled_cand_{ID}
             obj["_pooled_id"] = pid
             out.append(obj)
         except Exception:
@@ -119,42 +129,40 @@ def load_pooled_evals(eval_root: Path, split: str, task_id: str) -> List[Dict[st
     return out
 
 # ---------- metrics helpers ----------
+def sort_key_on_eval(o: Dict[str, Any]):
+    ev = normalize_eval(o.get("evaluation", {}))
+    s = ev["summary"]
+    return (
+        -safe_int(s.get("primary_perfect"), 0),
+        -safe_float(s.get("secondary_pct"), 0.0),
+        -safe_float(s.get("parse_rate"), 0.0),
+    )
+
 def pick_best(evals: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not evals:
         return None
-    def keyfn(o: Dict[str, Any]):
-        ev = normalize_eval(o.get("evaluation", {}))
-        s = ev["summary"]
-        return (
-            -int(s.get("primary_perfect", 0)),
-            -float(s.get("secondary_pct", 0.0)),
-            -float(s.get("parse_rate", 0.0)),
-        )
-    return sorted(evals, key=keyfn)[0]
+    return sorted(evals, key=sort_key_on_eval)[0]
 
 def average_summary(evals: List[Dict[str, Any]]) -> Optional[Dict[str, float]]:
     if not evals:
         return None
-    prims: List[float] = []
-    prim_den: List[int] = []
+    prim_fracs: List[float] = []
     secs: List[float] = []
     parses: List[float] = []
     sizes: List[float] = []
     for o in evals:
         ev = normalize_eval(o.get("evaluation", {}))
         s = ev["summary"]
-        # primary as fraction of pairs
-        n = int(s.get("num_pairs", 0) or 0)
-        pp = int(s.get("primary_perfect", 0) or 0)
-        prims.append((pp / n) if n else 0.0)
-        prim_den.append(n)
-        secs.append(float(s.get("secondary_pct", 0.0)))
-        parses.append(float(s.get("parse_rate", 0.0)))
-        sizes.append(float(s.get("size_ok_rate", 0.0)))
+        n  = safe_int(s.get("num_pairs"), 0)
+        pp = safe_int(s.get("primary_perfect"), 0)
+        prim_fracs.append((pp / n) if n else 0.0)
+        secs.append(safe_float(s.get("secondary_pct"), 0.0))
+        parses.append(safe_float(s.get("parse_rate"), 0.0))
+        sizes.append(safe_float(s.get("size_ok_rate"), 0.0))
     def avg(xs: List[float]) -> float:
         return sum(xs) / len(xs) if xs else 0.0
     return {
-        "primary_pct": avg(prims),
+        "primary_pct": avg(prim_fracs),
         "secondary_pct": avg(secs),
         "parse_rate": avg(parses),
         "size_ok_rate": avg(sizes),
@@ -163,21 +171,39 @@ def average_summary(evals: List[Dict[str, Any]]) -> Optional[Dict[str, float]]:
 def extract_summary_row(label: str, obj: Dict[str, Any]) -> Tuple[str, float, float, float, float]:
     ev = normalize_eval(obj.get("evaluation", {}))
     s = ev["summary"]
-    primary_pct = (int(s.get("primary_perfect", 0)) / int(s.get("num_pairs", 1) or 1))
+    n  = max(1, safe_int(s.get("num_pairs"), 0))
+    pp = safe_int(s.get("primary_perfect"), 0)
+    primary_pct = pp / n
     return (
         label,
         float(primary_pct),
-        float(s.get("secondary_pct", 0.0)),
-        float(s.get("parse_rate", 0.0)),
-        float(s.get("size_ok_rate", 0.0)),
+        safe_float(s.get("secondary_pct"), 0.0),
+        safe_float(s.get("parse_rate"), 0.0),
+        safe_float(s.get("size_ok_rate"), 0.0),
     )
 
+def summarize_for_csv(kind: str, ident: int, obj: Dict[str, Any]) -> Dict[str, Any]:
+    ev = normalize_eval(obj.get("evaluation", {}))
+    s = ev["summary"]
+    n  = safe_int(s.get("num_pairs"), 0)
+    pp = safe_int(s.get("primary_perfect"), 0)
+    return {
+        "set": kind,                   # "individual" or "pooled"
+        "id": ident,                   # cand_id or pooled_id
+        "num_pairs": n,
+        "primary_perfect": pp,
+        "primary_pct": (pp / n) if n else 0.0,
+        "secondary_pct": safe_float(s.get("secondary_pct"), 0.0),
+        "parse_rate": safe_float(s.get("parse_rate"), 0.0),
+        "size_ok_rate": safe_float(s.get("size_ok_rate"), 0.0),
+    }
+
 # ---------- table printing ----------
-def print_header(task_id: str):
-    print(f"{BOLD}Task {task_id}{RESET}")
-    print("-" * 72)
+def print_header(task_id: str, n_indiv: int, n_pooled: int):
+    print(f"{BOLD}Task {task_id}{RESET}  {DIM}(individual={n_indiv}, pooled={n_pooled}){RESET}")
+    print("-" * 76)
     print(f"{BOLD}Source{' ' * 11}Primary    Secondary   Parse      Size OK{RESET}")
-    print(f"{DIM}{'-'*72}{RESET}")
+    print(f"{DIM}{'-'*76}{RESET}")
 
 def print_row(name: str, primary: Optional[float], secondary: Optional[float],
               parse: Optional[float], size_ok: Optional[float]):
@@ -193,12 +219,45 @@ def print_row(name: str, primary: Optional[float], secondary: Optional[float],
         f"{cfmt(fmt_rate(size_ok), zc):>8}"
     )
 
+def print_leaderboard(title: str, rows: List[Tuple[str,int,Dict[str,Any]]], top_n: int):
+    if not rows or top_n <= 0:
+        return
+    print(f"\n{BOLD}{title}{RESET}")
+    print(f"{DIM}{'-'*76}{RESET}")
+    for (kind, ident, obj) in rows[:top_n]:
+        ev = normalize_eval(obj.get("evaluation", {}))
+        s = ev["summary"]
+        n  = max(1, safe_int(s.get("num_pairs"), 0))
+        pp = safe_int(s.get("primary_perfect"), 0)
+        primary_pct  = pp / n
+        secondary_pct = safe_float(s.get("secondary_pct"), 0.0)
+        parse_rate    = safe_float(s.get("parse_rate"), 0.0)
+        size_ok_rate  = safe_float(s.get("size_ok_rate"), 0.0)
+        label = f"{kind} #{ident}"
+        print_row(label, primary_pct, secondary_pct, parse_rate, size_ok_rate)
+
+# ---------- CSV ----------
+def save_csv(path: Path,
+             indiv_rows: List[Dict[str, Any]],
+             pooled_rows: List[Dict[str, Any]]) -> None:
+    fieldnames = ["set","id","num_pairs","primary_perfect","primary_pct","secondary_pct","parse_rate","size_ok_rate"]
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for r in indiv_rows:
+            w.writerow(r)
+        for r in pooled_rows:
+            w.writerow(r)
+
+# ---------- main ----------
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", type=str, choices=["training", "evaluation"], default="training")
     ap.add_argument("--task-id", type=str, required=True)
     ap.add_argument("--revisions", type=Path, default=Path("revisions"))
     ap.add_argument("--pooled-evals", type=Path, default=Path("eval_outputs_pooled"))
+    ap.add_argument("--show-top", type=int, default=0, help="Show top-N candidates for both sets (0=hide).")
+    ap.add_argument("--save-csv", type=Path, default=None, help="Optional CSV output path with per-candidate summaries.")
     args = ap.parse_args()
 
     # Load individual (latest round per candidate)
@@ -207,8 +266,8 @@ def main():
     # Load pooled (eval files produced by pooled reviser)
     pooled = load_pooled_evals(args.pooled_evals, args.split, args.task_id)
 
-    # Build rows
-    print_header(args.task_id)
+    # Header
+    print_header(args.task_id, len(indiv), len(pooled))
 
     # Individual — Best / Average
     if indiv:
@@ -238,9 +297,23 @@ def main():
         print_row("Pooled Best", None, None, None, None)
         print_row("Pooled Avg",  None, None, None, None)
 
-    print(f"{DIM}{'-'*72}{RESET}")
+    print(f"{DIM}{'-'*76}{RESET}")
     note = "Tip: run pooled reviser with --evaluate-new to populate eval_outputs_pooled/."
     print(f"{GREY}{note}{RESET}")
+
+    # Optional: leaderboards
+    if args.show_top and args.show_top > 0:
+        indiv_rows = sorted([( "cand", o.get("_cand_id", -1), o) for o in indiv ], key=lambda t: sort_key_on_eval(t[2]))
+        pooled_rows = sorted([("pooled", o.get("_pooled_id", -1), o) for o in pooled], key=lambda t: sort_key_on_eval(t[2]))
+        print_leaderboard("Top Individual Candidates", indiv_rows, args.show_top)
+        print_leaderboard("Top Pooled Candidates", pooled_rows, args.show_top)
+
+    # Optional: CSV
+    if args.save_csv:
+        indiv_csv = [summarize_for_csv("individual", safe_int(o.get("_cand_id"), -1), o) for o in indiv]
+        pooled_csv = [summarize_for_csv("pooled", safe_int(o.get("_pooled_id"), -1), o) for o in pooled]
+        save_csv(args.save_csv, indiv_csv, pooled_csv)
+        print(f"\n{CYAN}Saved CSV to {args.save_csv}{RESET}")
 
 if __name__ == "__main__":
     main()
